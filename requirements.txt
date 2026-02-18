@@ -1,0 +1,9 @@
+numpy
+scikit-learn
+scikit-image
+matplotlib
+pillow
+tqdm
+shap
+torchinfo
+umap-learn
