@@ -1,3 +1,4 @@
+import argparse
 import statistics
 
 import torchvision
@@ -46,27 +47,36 @@ torch.backends.cudnn.benchmark = False
 encoder_epochs = 100
 batch_size = 32
 num_epochs = 100
-grid_size = 500
-n_points_per_square = 1
-shapley = False
-use_umap = True
 pixels = 28 # (2352 features)
 
+parser = argparse.ArgumentParser(description="Config for making DBMs for a multi-class problem")
+parser.add_argument("-r", "--reduction", default='tsne', choices=['umap','tsne'], help="dimensionality reduction technique to use")
+parser.add_argument("-s", "--size", default=500, type=int, help="size of the image to generate")
+parser.add_argument("-d", "--use_data", action="store_true", help="Instead of using a Shapley values, create DBMs using the projected data points.")
+parser.add_argument("-p", "--points", default=10, type=int, help="Number of points to generate per pixel")
 
-SUFFIX = ''
-CNN_PATH = f'Models/SVHN/CNN.pth'
-RESULTS_FOLDER = 'Results/SVHN/'
-SUFFIX += '_data_space' if not shapley else ''
-SUFFIX += '_umap' if use_umap else ''
-NNINV_PATH = f'Models/SVHN/NNInv{SUFFIX}.pth'
-RES_SUFFIX = '_umap' if use_umap else ''
 
 if __name__ == '__main__':
     script_path = Path(__file__).parent
     os.chdir(script_path)
-    print(NNINV_PATH)
     print(f'Working in directory {script_path}')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    args = parser.parse_args()
+    shapley = not args.use_data
+    use_umap = args.reduction == 'umap'
+    n_points_per_square = args.points
+    grid_size = args.size
+
+    print(args.use_data)
+
+    SUFFIX = ''
+    CNN_PATH = f'Models/SVHN/CNN.pth'
+    RESULTS_FOLDER = 'Results/SVHN/'
+    SUFFIX += '_data_space' if not shapley else ''
+    SUFFIX += '_umap' if use_umap else ''
+    NNINV_PATH = f'Models/SVHN/NNInv{SUFFIX}.pth'
+    RES_SUFFIX = '_umap' if use_umap else ''
+
     if not os.path.exists(RESULTS_FOLDER):
         os.mkdir(RESULTS_FOLDER)
     if shapley:
