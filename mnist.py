@@ -149,6 +149,7 @@ if __name__ == '__main__':
     precision_score = precision_score(y_test, y_pred, average='macro')
 
     print(f'Model precision: {precision_score:.3f}, Model recall: {recall_score:.3f}')
+    X_train_pred, _ = classifier.compute_class(X_train, split=True)
 
     if shapley:
         SHAP_DIR = 'ShapleyValues/MNIST/'
@@ -196,7 +197,7 @@ if __name__ == '__main__':
     points_to_invert = make_grid_points(grid_size, n_points_per_square)
     flattened_points = points_to_invert.reshape((grid_size * grid_size * n_points_per_square, 2))
 
-    inverted_points = inverse_function.inverse(flattened_points, batch_data=True)
+    inverted_points = inverse_function.inverse(flattened_points)
     inverted_points = inverted_points.reshape((inverted_points.shape[0], 1, 28, 28))
     classification_grid, confidence_grid = compute_decision_boundary_map(classifier.to('cpu'), inverted_points, grid_size, n_points_per_square, binary=False)
 
@@ -204,19 +205,7 @@ if __name__ == '__main__':
     make_single_boundary_map(confidence_grid, filename=f'{RESULTS_FOLDER}/confidence{RES_SUFFIX}.png', num_classes=10,
                              confidence=True)
 
-    num_of_rand_points = 5_000
-    shuffled_point_indecies = np.arange(len(reduced_dataset))
-    np.random.shuffle(shuffled_point_indecies)
-    shuffled_point_indecies = shuffled_point_indecies[:num_of_rand_points]
-
-    random_points = reduced_dataset[shuffled_point_indecies]
-    random_point_classes = point_classes[shuffled_point_indecies]
-
-    make_single_boundary_map_with_points(classification_grid, random_points, random_point_classes,
-                                         filename=f'{RESULTS_FOLDER}/map_with_points{RES_SUFFIX}.png', num_classes=10,
-                                         grid_size=grid_size)
-
-    _, prediction_grid = map_points_to_grid(reduced_dataset, point_classes)
+    _, prediction_grid = map_points_to_grid(reduced_dataset, X_train_pred)
     accuracy = (calculate_accuracy(classification_grid, prediction_grid) / len(reduced_dataset)) * 100
     print(f'Default Map Accuracy (predicted labels): {accuracy:.2f}%')
 
@@ -230,11 +219,11 @@ if __name__ == '__main__':
         print(f'Class {x} map recall: {map_recall:5f}')
 
     avg_precision = statistics.mean(precision_scores)
+    precision_variance = statistics.variance(precision_scores)
     average_recall = statistics.mean(recall_scores)
-
-    print(f'Avg map precision: {avg_precision:5f}')
-    print(f'Avg map recall: {average_recall:5f}')
-    print(f'Most common class; {statistics.mode(classification_grid.flatten())}')
+    recall_variance = statistics.variance(recall_scores)
+    print(f'Avg map precision: {avg_precision:5f} (variance: {precision_variance:5f})')
+    print(f'Avg map recall: {average_recall:5f} (variance: {recall_variance:5f})')
     #map_to_witness_grid(classification_grid, prediction_grid)
 
     samples_to_invert = 8
