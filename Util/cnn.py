@@ -91,19 +91,22 @@ class CNN(nn.Module):
             batch_conf = torch.max(batch, dim=1)[0].detach().numpy()
         return batch_class, batch_conf
 
-    def compute_class(self, x, split=False):
-        x = torch.Tensor(x)
+    def compute_class(self, x, split=False, device=None):
+        if device is None:
+            device = torch.device('cpu')
+        self.to(device)
+        x = torch.Tensor(x).to(device)
         if split:
             classes = []
             confidences = []
-            batches = torch.tensor_split(x, 50)
-            for batch in tqdm(batches, desc="Processing batches (map)", unit="batches"):
+            batches = torch.tensor_split(x, 10_000)
+            for batch in tqdm(batches, desc="Processing batches", unit="batches"):
                 batch_class, batch_conf = self._batch_run(batch)
                 classes.extend(batch_class)
                 confidences.extend(batch_conf)
         else:
             classes, confidences = self._batch_run(x)
-
+        torch.cuda.empty_cache()
         return np.array(classes), np.array(confidences)
 
 def __train_conv(model, device, train_loader, optimizer, epoch, report_interval):

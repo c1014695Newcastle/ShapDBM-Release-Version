@@ -102,7 +102,7 @@ def make_grid_points(grid_size, n_points_per_square):
             count += n_points_per_square
     return rand_points_reshaped
 
-def compute_decision_boundary_map(classifier, inverted_points, grid_size,n_points, binary=True):
+def compute_decision_boundary_map(classifier, inverted_points, grid_size,n_points, binary=True, device=None):
     """
     Method to compute the decision boundary map for a given classifier as well as the classifier's confidence in the prediction.
 
@@ -115,7 +115,7 @@ def compute_decision_boundary_map(classifier, inverted_points, grid_size,n_point
         confidence = (classifier.compute_confidence(inverted_points)).reshape(grid_size, grid_size, n_points)
         classifications = (confidence > 0.5).astype(int).reshape(grid_size, grid_size, n_points)
     else:
-        classifications, confidence = classifier.compute_class(inverted_points, split=True)
+        classifications, confidence = classifier.compute_class(inverted_points, split=True, device=device)
         classifications = classifications.astype(int).reshape(grid_size, grid_size, n_points)
         confidence = confidence.reshape(grid_size, grid_size, n_points)
     classifications = np.array([[statistics.mode(x) for x in y] for y in tqdm(classifications, desc='Making final grid', unit='rows')])
@@ -171,3 +171,35 @@ def plot_original_vs_inverse_grid(original_images, inverted_images, labels, colo
     if filename != '':
         plt.savefig(filename, dpi=300, bbox_inches='tight')
     plt.show()
+
+def make_illustrated_fig(map, points, coordinates, filename):
+    positions = np.zeros_like(map)
+    samples = []
+    for c in coordinates:
+        positions[c[1], c[0]] = 20
+        samples.append(points[c[1], c[0], 0])
+
+    plt.figure(figsize=(10,10))
+    plt.imshow(positions, cmap='viridis', origin='lower')
+    plt.xticks([])
+    plt.yticks([])
+    plt.savefig(filename, bbox_inches='tight', dpi=300)
+    #plt.show()
+    return np.array(samples)
+
+def extract_samples_from_bounding_box(map, start, end, points_grid):
+    x1, x2 = sorted([start[0], end[0]])
+    y1, y2 = sorted([start[1], end[1]])
+
+    region = map[y1:y2, x1:x2]
+    point_region = []
+    for row in points_grid[y1:y2]:
+        point_region.append(row[x1:x2])
+    filtered_points = [[sub for sub in layer if sub] for layer in point_region]
+    map_copy = map.copy()
+    map_copy[min(start[1], end[1]):max(start[1], end[1]), min(start[0], end[0]):max(start[0], end[0]),] = 0
+
+    make_single_boundary_map(map_copy, '', 10)
+    make_single_boundary_map(region, '', 10)
+    #print(filtered_points)
+    return filtered_points
