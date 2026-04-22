@@ -147,6 +147,7 @@ if __name__ == '__main__':
         REDUCED_POINTS_PATH = 'Data/DataProjections/sampled_SVHN_data_2d.csv'
         reduced_data_df = load_or_compute_data_projections(X_flat, y_train, REDUCED_POINTS_PATH, SEED, False)
 
+    make_scatter(reduced_data_df['x'], reduced_data_df['y'], X_train_pred, no_axis=True, s=10)
     make_scatter(reduced_data_df['x'], reduced_data_df['y'], y_train, filename=f'{RESULTS_FOLDER}/svhn_train_2d.png', no_axis=True, s=10)
     make_scatter(reduced_data_df['x'], reduced_data_df['y'], y_train, filename=f'{RESULTS_FOLDER}/svhn_train_2d_no_cbar.png', no_axis=True, s=10, no_cbar=True)
     reduced_dataset = reduced_data_df.drop(['class'], axis=1).to_numpy()

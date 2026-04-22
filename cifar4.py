@@ -39,10 +39,10 @@ BATCH_SIZE = 32
 EPOCHS = 100
 GRID_SIZE = 500
 POINTS_PER_PIXEL = 1
-SHAPLEY = False
+SHAPLEY = True
 PIXELS = 28 # (2352 features)
 SUFFIX = ''
-USE_UMAP = True
+USE_UMAP = False
 
 CNN_PATH = f'Models/CIFAR4/CNN.pth'
 RESULTS_FOLDER = 'Results/CIFAR4/'
@@ -103,6 +103,8 @@ if __name__ == '__main__':
     X_train = np.array(X_train)
     y_train = np.array(y_train)
     X_flat = np.array(X_flat)
+    
+    print(X_train.shape)
 
     X_test = []
     y_test = []
@@ -202,8 +204,12 @@ if __name__ == '__main__':
         recall_scores.append(map_recall)
         print(f'Class {x} map precision: {map_precision:2f}')
         print(f'Class {x} map recall: {map_recall:2f}')
-    print(f'Avg map precision: {statistics.mean(precision_scores):2f}')
-    print(f'Avg map recall: {statistics.mean(recall_scores):2f}')
+    avg_precision = statistics.mean(precision_scores)
+    precision_variance = statistics.variance(precision_scores)
+    average_recall = statistics.mean(recall_scores)
+    recall_variance = statistics.variance(recall_scores)
+    print(f'Avg map precision: {avg_precision:5f} (variance: {precision_variance:5f})')
+    print(f'Avg map recall: {average_recall:5f} (variance: {recall_variance:5f})')
 
     samples_to_invert = 8
 

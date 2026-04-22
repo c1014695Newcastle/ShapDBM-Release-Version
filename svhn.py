@@ -27,7 +27,8 @@ from Util.nninv import NNInv, train_model, load_or_train_nninv
 
 from Util.shap_util import load_or_compute_shap_values, load_2d_shap
 from Util.vis_util import make_grid_points, compute_decision_boundary_map, make_single_boundary_map, make_scatter, \
-    make_single_boundary_map_with_points, plot_original_vs_inverse_grid
+    make_single_boundary_map_with_points, plot_original_vs_inverse_grid, make_illustrated_fig, \
+    extract_samples_from_bounding_box
 from Util.metric_util import calculate_accuracy, calculate_boundary_map_precision_recall, map_points_to_grid, \
     map_to_witness_grid
 
@@ -53,7 +54,7 @@ parser = argparse.ArgumentParser(description="Config for making DBMs for a multi
 parser.add_argument("-r", "--reduction", default='tsne', choices=['umap','tsne'], help="dimensionality reduction technique to use")
 parser.add_argument("-s", "--size", default=500, type=int, help="size of the image to generate")
 parser.add_argument("-d", "--use_data", action="store_true", help="Instead of using a Shapley values, create DBMs using the projected data points.")
-parser.add_argument("-p", "--points", default=10, type=int, help="Number of points to generate per pixel")
+parser.add_argument("-p", "--points", default=1, type=int, help="Number of points to generate per pixel")
 
 
 if __name__ == '__main__':
@@ -66,8 +67,6 @@ if __name__ == '__main__':
     use_umap = args.reduction == 'umap'
     n_points_per_square = args.points
     grid_size = args.size
-
-    print(args.use_data)
 
     SUFFIX = ''
     CNN_PATH = f'Models/SVHN/CNN.pth'
@@ -164,7 +163,7 @@ if __name__ == '__main__':
     point_classes = np.array(point_classes)
 
     classifier = load_or_train_cnn(train_loader, test_loader, device, CNN_PATH, report_interval=100)
-    y_pred, _ = classifier.compute_class(X_test)
+    y_pred, _ = classifier.compute_class(X_test, split=True, device=device)
 
     recall_score = recall_score(y_test, y_pred, average='macro')
     precision_score = precision_score(y_test, y_pred, average='macro')
@@ -190,6 +189,11 @@ if __name__ == '__main__':
     else:
         REDUCED_POINTS_PATH = f'Data/DataProjections/SVHN_2d{RES_SUFFIX}.csv'
         reduced_data_df = load_or_compute_data_projections(X_flat, y_train, REDUCED_POINTS_PATH, SEED, use_umap)
+    print(reduced_data_df.shape)
+    y_pred, _ = classifier.compute_class(X_train, split=True, device=device)
+    print(y_pred.shape)
+    make_scatter(reduced_data_df['x'], reduced_data_df['y'], y_pred, s=10, no_axis=True, num_classes=len(np.unique(y_train)), no_cbar=True)
+    make_scatter(reduced_data_df['x'][:10_000], reduced_data_df['y'][:10_000], y_pred[:10_000], s=10, no_axis=True,num_classes=len(np.unique(y_train)), no_cbar=True)
     make_scatter(reduced_data_df['x'], reduced_data_df['y'], y_train, filename=f'{RESULTS_FOLDER}points{RES_SUFFIX}.png', s=10, no_axis=True, num_classes=len(np.unique(y_train)), no_cbar=True)
     reduced_dataset = reduced_data_df.drop(['class'], axis=1).to_numpy()
     print('Done!')
@@ -204,18 +208,47 @@ if __name__ == '__main__':
 
     points_to_invert = make_grid_points(grid_size, n_points_per_square)
     flattened_points = points_to_invert.reshape((grid_size * grid_size * n_points_per_square, 2))
-    inverted_points = inverse_function.inverse(flattened_points, batch_data=True)
+    inverted_points = inverse_function.inverse(flattened_points)
     inverted_points = inverted_points.reshape((inverted_points.shape[0], 3, pixels, pixels))
-    classification_grid, confidence_grid = compute_decision_boundary_map(classifier.to('cpu'), inverted_points, grid_size, n_points_per_square, binary=False)
+    classification_grid, confidence_grid = compute_decision_boundary_map(classifier, inverted_points, grid_size, n_points_per_square, binary=False, device=device)
 
     make_single_boundary_map(classification_grid, filename=f'{RESULTS_FOLDER}/map{RES_SUFFIX}.png', num_classes=10)
     make_single_boundary_map(confidence_grid, filename=f'{RESULTS_FOLDER}/confidence{RES_SUFFIX}.png', num_classes=10, confidence=True)
     make_single_boundary_map_with_points(classification_grid, reduced_dataset[:10000], y_train[:10000], filename=f'{RESULTS_FOLDER}/map_with_points{RES_SUFFIX}.png', num_classes=10, grid_size=grid_size)
 
+
+    map_grid = inverted_points.reshape((grid_size, grid_size, n_points_per_square,3, 28, 28))
+    if shapley:
+        samples = make_illustrated_fig(classification_grid, map_grid, [
+            [225,200],[321,397],[138,167], [331,195], [407,294],
+            [218,203],[355,385],[129,146],            [408,280]
+
+        ], f'svhn_sample_locations{SUFFIX}.png')
+    else:
+        samples = make_illustrated_fig(classification_grid, map_grid,[[62,81], [220,305], [221, 154], [340,265]], f'svhn_sample_locations{SUFFIX}.png')
+
+    for i, img in enumerate(samples):
+        plt.figure(figsize=(5,5))
+        plt.imshow(samples[i].transpose((1, 2, 0)))
+        plt.title(f'Sample {i}')
+        plt.xticks([])
+        plt.yticks([])
+        plt.show()
+
+    fig, axs = plt.subplots(nrows=2, ncols=5, figsize=(10,5))
+    for i, ax in enumerate(axs.flat):
+        if i >= len(samples):
+            ax.axis('off')
+            continue
+        ax.imshow(samples[i].transpose((1, 2, 0)))
+        ax.set_title(f'Sample {i}')
+        ax.set_xticks([])
+        ax.set_yticks([])
+    plt.show()
+
     _, label_grid = map_points_to_grid(reduced_dataset, y_train)
     accuracy = (calculate_accuracy(classification_grid, label_grid) / len(reduced_dataset)) * 100
     print(f'Default Map Accuracy (true labels): {accuracy:.2f}%')
-
     _, prediction_grid = map_points_to_grid(reduced_dataset, X_train_pred)
     accuracy = (calculate_accuracy(classification_grid, prediction_grid) / len(reduced_dataset)) * 100
     print(f'Default Map Accuracy (pred labels): {accuracy:.2f}%')
@@ -230,9 +263,12 @@ if __name__ == '__main__':
         print(f'Class {x} map recall: {map_recall:5f}')
 
     avg_precision = statistics.mean(precision_scores)
+    precision_variance = statistics.variance(precision_scores)
     average_recall = statistics.mean(recall_scores)
-    print(f'Avg map precision: {avg_precision:5f}')
-    print(f'Avg map recall: {average_recall:5f}')
+    recall_variance = statistics.variance(recall_scores)
+    print(f'Avg map precision: {avg_precision:5f} (variance: {precision_variance:5f})')
+    print(f'Avg map recall: {average_recall:5f} (variance: {recall_variance:5f})')
+
 
     samples_to_invert = 8
 
@@ -244,5 +280,26 @@ if __name__ == '__main__':
     inverted_images = inverse_function.inverse(points_to_invert).reshape((samples_to_invert, 3, pixels, pixels))
 
     plot_original_vs_inverse_grid(original_images, inverted_images, sample_labels, filename=f'{RESULTS_FOLDER}/original_vs_inverse_grid{RES_SUFFIX}.png')
+
+    print(len(prediction_grid))
+    if shapley:
+        predicted_samples = extract_samples_from_bounding_box(classification_grid, [329, 321], [368, 229], prediction_grid)
+        true_label_samples = extract_samples_from_bounding_box(classification_grid, [329, 321], [368, 229], label_grid)
+    else:
+        predicted_samples  = extract_samples_from_bounding_box(classification_grid, [149, 65], [178, 37], prediction_grid)
+        true_label_samples = extract_samples_from_bounding_box(classification_grid, [149, 65], [178, 37], label_grid)
+
+    predicted_samples = np.array([item for layer in predicted_samples for sub in layer for item in sub])
+    true_label_samples = np.array([item for layer in true_label_samples for sub in layer for item in sub])
+    print(predicted_samples)
+    print(true_label_samples)
+
+    print(len(predicted_samples))
+    correct_pred = predicted_samples == true_label_samples
+    print(correct_pred)
+    print(sum(correct_pred))
+
+
+
 
 

@@ -43,20 +43,12 @@ class NNInv(nn.Module):
     def forward(self, x):
         return self.m(x)
 
-    def inverse(self, X_2d, batch_data=False):
+    def inverse(self, X_2d):
         self.eval()
-        X_2d_tensor = torch.tensor(X_2d, dtype=torch.float32)  # Convert input to Tensor
         with torch.no_grad():
-            predictions = []
-            if batch_data:
-                batches = torch.tensor_split(X_2d_tensor, 20)
-                for batch in tqdm(batches, desc="Processing batches (inverse)", unit="batches"):
-                    inv_batch = self(batch)
-                    predictions.extend(inv_batch)
-                predictions = np.array(predictions)
-            else:
-                predictions = self(X_2d_tensor).numpy()
-        return predictions
+            X_2d_tensor = torch.tensor(X_2d, dtype=torch.float32) # Convert input to Tensor
+            predictions = self(X_2d_tensor)
+        return predictions.numpy()
 
 def train_model(model, X, X_2d, device, optimiser, epochs, loss_fn):
     """
